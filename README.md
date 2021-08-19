@@ -20,6 +20,3 @@ The codes consist of **nine MATLAB** scripts and a brief explanation for each on
 5. *ECVest.m*: to estimate error covariance matrix and data-truth correlation for given covariance matrix (any number of products). This is equivalent to **Triple Collocation** but produces no failures and is applicable for any number of products.
 6. *EeeTGEN.m*: to generate error covariance matrix for given number of products and error cross-correlation
 7. *dataGEN.m*: to generate orthogonal y (truth) and e (error) for given data length, number of products, error cross-correlation, and signal-to-noise ratio
-  
-## Disclaimer
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
