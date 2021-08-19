@@ -1,5 +1,5 @@
 function EeeT = EeeTGEN(p,ecc)
-% This function is to generate orthogonal y and e
+% This function is to error covarance matrix
 %
 % INPUT
 %   p = number of datasets (scalar)
