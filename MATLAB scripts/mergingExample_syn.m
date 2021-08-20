@@ -89,7 +89,7 @@ disp([' * MSE for WA, SNRopt, maxR, EW: ',num2str(round(MSE_true,3))])
 disp([' * R2 for WA, SNRopt, maxR, EW: ',num2str(round(R2_true,3))])
 %% Step 4: Merging using estimated parameters
 % Estimation of merging statistics
-Ey2_est = Ey2*0.5; % estimated signal power
+Ey2_est = Ey2*0.5; % roughly estimated signal power (e.g., reanalysis, var(mean(x,2)). Here, 0.5 of the true Ey2 is arbitrarily selected.
 [EeeT_est,theta_est,rho2_est] = ECVest(ExxT); % modified SNRest for TC-like estimation
 [N_est,a_est] = SNRest(ExxT, Ey2_est); % SNR-est
 
