@@ -23,7 +23,7 @@ function [N_est,a_est] = SNRest(ExxT, Ey2)
 % Parameters
 C = ExxT/Ey2;
 P = size(C,1); % number of products
-beta = 0.5*min(diag(ExxT)); % tuning parameter for itial a (should be < any of C diagonals)
+beta = 0.5*min(diag(C)); % tuning parameter for itial a (should be < any of C diagonals)
 % beta = 0.1; % tuning parameter for unitializing a (should be < any of C diagonals)
 lamda = 0.01; % learning rate
 iters = 2000; % number of iterations
