@@ -2,9 +2,7 @@
 
 This is for sharing codes (MATLAB) used in 
 > Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021). "Rethinking Satellite Data Merging: From Averaging to SNR Optimization." IEEE
-Trans Geosci Remote Sens, Accepted
-
-The final version will be available soon on the journal website, and a preprint that is not much different from the final version can be obtained from [ResearchGate](https://www.researchgate.net/publication/349961492_Rethinking_Satellite_Data_Merging_From_Averaging_to_SNR_Optimization_techrxiv14214035) or [Techrxiv](https://www.techrxiv.org/articles/preprint/Rethinking_Satellite_Data_Merging_From_Averaging_to_SNR_Optimization/14214035)
+Trans Geosci Remote Sens, *Early Access*, 1‒15, doi: http://dx.doi.org/10.1109/TGRS.2021.3107028
 
 ## Code description
 The codes consist of **nine MATLAB** scripts and a brief explanation for each one is as follows.
