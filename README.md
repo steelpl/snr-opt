@@ -1,8 +1,7 @@
 # SNR-opt
 
 This is for sharing codes (MATLAB) used in 
-> Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021). "Rethinking Satellite Data Merging: From Averaging to SNR Optimization." IEEE
-Trans Geosci Remote Sens, *Early Access*, 1‒15, doi: http://dx.doi.org/10.1109/TGRS.2021.3107028
+> S. Kim, A. Sharma, Y. Y. Liu and S. I. Young, "Rethinking Satellite Data Merging: From Averaging to SNR Optimization," in IEEE Transactions on Geoscience and Remote Sensing, vol. 60, pp. 1-15, 2022, Art no. 4405215, doi: http://dx.doi.org/10.1109/TGRS.2021.3107028
 
 ## Code description
 The codes consist of **nine MATLAB** scripts and a brief explanation for each one is as follows.
