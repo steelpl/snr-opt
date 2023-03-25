@@ -35,7 +35,7 @@ ecc = 0.3; % error cross-correlation [0,1]
 SNRdB = 0.1; % SNR in dB
 
 %% Step 2: Synthetic data generation
-% Signal and error: y and e
+% error covariance matrix, signal power, N
 EeeT = EeeTGEN(p,ecc); % error covariance matrix
 SNR = 10^(SNRdB/10); % SNR conversion
 Ey2 = mean(diag(EeeT)*SNR); % Signal power based on given SNR and EeeT
