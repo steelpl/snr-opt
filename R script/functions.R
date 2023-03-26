@@ -1,26 +1,29 @@
-# dataGEN function
-# This function is to generate orthogonal y and e
-#
-# INPUT
-#   n = data length (scalar)
-#   p: number of datasets (scalar)
-#   ecc = error cross-correlation (scalar, [0,1])
-#   SNRdB = signal-to-noise ratio in dB (scalar)
-#
-# OUTPUT
-#   y = signal (nx1)
-#   e = error (nxp)
 dataGEN <- function(n, p, ecc, SNRdB) {
+  # dataGEN function
+  # This function is to generate orthogonal y and e
+  #
+  # INPUT
+  #   n = data length (scalar)
+  #   p: number of datasets (scalar)
+  #   ecc = error cross-correlation (scalar, [0,1])
+  #   SNRdB = signal-to-noise ratio in dB (scalar)
+  #
+  # OUTPUT
+  #   y = signal (nx1)
+  #   e = error (nxp)
+  
   # Estimation
   SNR <- 10^(SNRdB/10)
-  b <- t(which(upper.tri(matrix(1, p, p), diag = FALSE))) # combination pairs
+  b <- combn(1:p, 2)
   
   # Error covariance matrix: EeeT
   EeeT <- diag(runif(p)) # error variances
-  for (i in 1:nrow(b)) {
-    EeeT[b[i,1], b[i,2]] <- sqrt(EeeT[b[i,1], b[i,1]] * EeeT[b[i,2], b[i,2]]) * ecc
-    EeeT[b[i,2], b[i,1]] <- EeeT[b[i,1], b[i,2]]
+  for (i in 1:ncol(b)) {
+    EeeT[b[1,i], b[2,i]] <- sqrt(EeeT[b[1,i], b[1,i]] * EeeT[b[2,i], b[2,i]]) * ecc
   }
+  
+  # Flip the matrix to make it symmetric
+  EeeT <- (EeeT + t(EeeT)) - diag(diag(EeeT))
   
   # Generating y and e
   Ey2 <- mean(diag(EeeT) * SNR) # Signal power based on given SNR and EeeT
@@ -30,11 +33,9 @@ dataGEN <- function(n, p, ecc, SNRdB) {
   m[2:(p + 1), 2:(p + 1)] <- EeeT
   
   ye <- matrix(rnorm(n * (p + 1)), n, p + 1) # [y, e]
-  ye <- ye - apply(ye, 2, mean) # mean removal
-  cov <- cov(t(ye)) # compute covariance matrix of transposed array
-  cholesky_cov <- chol(cov) # Cholesky decomposition of covariance matrix
-  ye <- ye %*% solve(cholesky_cov) # normalize by inverse of Cholesky decomposition of covariance matrix
-  ye <- ye %*% chol(m) # multiply by Cholesky decomposition of m
+  ye <- scale(ye, center = TRUE)
+  ye <- ye %*% chol(cov(ye))  # scale by the Cholesky factor of the covariance matrix
+  ye <- ye %*% chol(m)  # scale by the Cholesky factor of m
   
   y <- ye[, 1]
   e <- ye[, 2:(p + 1)]
@@ -42,81 +43,87 @@ dataGEN <- function(n, p, ecc, SNRdB) {
   return(list(y = y, e = e))
 }
 
-# WA function
-# This function is to estimate weight for Weighted Average
-#
-# INPUT
-#   EeeT = error covariance matrix (pxp)
-#   
-# OUTPUT 
-#   u = merging weight (px1)
+
 WA <- function(EeeT) {
-  eta <- matrix(1, nrow = nrow(EeeT), ncol = 1)
-  u <- solve(EeeT) %*% eta / t(eta) %*% solve(EeeT) %*% eta
-  
+  # WA function
+  # This function is to estimate weight for Weighted Average
+  #
+  # INPUT
+  #   EeeT = error covariance matrix (pxp)
+  #   
+  # OUTPUT 
+  #   u = merging weight (px1)
+  eta <- matrix(c(rep(1, ncol(EeeT))), ncol = 1)
+  u <- as.numeric(solve(t(eta)%*%solve(EeeT)%*%eta))*(solve(EeeT)%*%eta)
   return(u)
 }
 
-# SNRopt function
-# This function is to estimate weight for SNRopt
-#
-# INPUT
-#   N = noise-to-signal ratio matrix (pxp)
-#   a = scaling factor (px1)
-#
-# OUTPUT 
-#   u = merging weight (px1)
+
 SNRopt <- function(N, a) {
-  u <- solve(N + outer(a, a)) %*% a
+  # SNRopt function
+  # This function is to estimate weight for SNRopt
+  #
+  # INPUT
+  #   N = noise-to-signal ratio matrix (pxp)
+  #   a = scaling factor (px1)
+  #
+  # OUTPUT 
+  #   u = merging weight (px1)
+  u <- solve(N + a %*% t(a))%*%a
   
   return(u)
 }
 
-# maxR function
-# This function is to estimate weight for maximizing Pearson R
-#
-# INPUT
-#   a = scaling factor (px1), equivalent to use a = theta; a = rho.*std(x)'
-#
-# OUTPUT 
-#   u: merging weight (px1)
 maxR <- function(a, ExxT) {
+  # maxR function
+  # This function is to estimate weight for maximizing Pearson R
+  #
+  # INPUT
+  #   a = scaling factor (px1), equivalent to use a = theta; a = rho.*std(x)'
+  #
+  # OUTPUT 
+  #   u: merging weight (px1)
+  
   # Generalized Rayleigh quotient
-  # A * u = lamda * B * u
-  A <- outer(a, a)
+  A <- a %*% t(a)
   B <- ExxT
   
-  eig <- eigen(solve(B) %*% A)
-  u <- eig$vectors[, which.max(eig$values)]
-  u <- u / sum(u) # normalizing sum to 1
+  # Perform the generalized eigenvalue decomposition
+  eigen_result <- geigen(A, B)
+  
+  # Extract the eigenvectors (stored as columns)
+  V <- eigen_result$vectors
+  # Get the last (leading) eigenvector
+  u <- V[, ncol(V)]
+  # Normalize u so that its sum is equal to 1
+  u <- matrix(u / sum(u), nrow = nrow(a), ncol = 1, byrow = TRUE)
   
   return(u)
 }
 
-# ECVest function
-# This function is a modified version of SNRest to estimate TC-like results
-#
-# INPUT
-#   ExxT = covariance matrix of x (pxp)
-#
-# OUTPUT 
-#   EeeT_est = estimated error covariance matrix (pxp)
-#   theta_est = estimated theta (px1, = a*sqrt(Ey2))
-#   rho2_est = estimated squared data-truth correlation (px1)
 ECVest <- function(ExxT) {
+  # ECVest function
+  # This function is a modified version of SNRest to estimate TC-like results
+  #
+  # INPUT
+  #   ExxT = covariance matrix of x (pxp)
+  #
+  # OUTPUT 
+  #   EeeT_est = estimated error covariance matrix (pxp)
+  #   theta_est = estimated theta (px1, = a*sqrt(Ey2))
+  #   rho2_est = estimated squared data-truth correlation (px1)
+  
   # Parameters
   p <- nrow(ExxT) # number of products
-  beta <- 0.5 * min(diag(ExxT)) # tuning parameter for itial a (should be < any of ExxT diagonals)
-  # beta <- 0.1 # tuning parameter for unitializing a (should be < any of ExxT diagonals)
+  beta <- 0.5 * min(diag(ExxT)) # tuning parameter for initial a (should be < any of ExxT diagonals)
   lamda <- 0.01 # learning rate
   iters <- 2000 # number of iterations
   
   # Initialization
-  eig <- eigen
-  V <- eig$vectors
-  D <- diag(eig$values)
-  max_idx <- which.max(eig$values)
-  theta_est <- V[, max_idx] * sqrt(D[max_idx]) # initialize theta
+  eig_result <- eigen(ExxT - beta * diag(p))
+  V <- eig_result$vectors # V: eigen (column) vectors
+  D <- eig_result$values # D: eigen values (diagonals)
+  theta_est <- V[, 1] * sqrt(D[1]) # initialize theta
   theta_est <- theta_est * sign(theta_est) # assuming '+' sign'
   theta_init <- theta_est
   
@@ -128,41 +135,45 @@ ECVest <- function(ExxT) {
         grad[j] <- grad[j] + (j != k) * theta_est[k] * sign(theta_est[j] * theta_est[k] - ExxT[j, k])
       }
     }
+  
     # descent
-    theta_est <- theta_est - (lamda / norm(theta_init)) * grad
+    theta_est <- theta_est - (lamda /    norm(theta_init, type = "2")) * grad
     # project
-    theta_est <- theta_est - sign(theta_est) * sqrt(pmax(theta_est^2 - diag(ExxT), 0))
+    theta_est <- theta_est - sign(theta_est) * sqrt(pmax((theta_est^2 - diag(ExxT)), 0))
   }
   
-  EeeT_est <- ExxT - outer(theta_est, theta_est)
-  rho2_est <- theta_est^2 / diag(ExxT)
+  EeeT_est <- ExxT - theta_est %*% t(theta_est)
+  rho2_est <- (theta_est^2) / diag(ExxT)
   
   return(list(EeeT_est = EeeT_est, theta_est = theta_est, rho2_est = rho2_est))
 }
 
-# SNRest function
-# This function is for eatimating N and a
-#
-# INPUT
-#   ExxT = covariance matrix of x (pxp)
-#   Ey2 = signal power (scalar)
-#
-# OUTPUT
-#   N_est = estimated noise-to-signal ratio (pxp)
-#   a_est = estimated scaling factor (px1)
+
 SNRest <- function(ExxT, Ey2) {
+  # SNRest function
+  # This function is for estimating N and a
+  #
+  # INPUT
+  #   ExxT = covariance matrix of x (pxp)
+  #   Ey2 = signal power (scalar)
+  #
+  # OUTPUT
+  #   N_est = estimated noise-to-signal ratio (pxp)
+  #   a_est = estimated scaling factor (px1)
+  
   # Parameters
   C <- ExxT / Ey2
-  P <- nrow(C) # number of products
-  beta <- 0.5 * min(diag(C)) # tuning parameter for itial a (should be < any of C diagonals)
-  # beta <- 0.1 # tuning parameter for unitializing a (should be < any of C diagonals)
-  lamda <- 0.01 # learning rate
-  iters <- 2000 # number of iterations
+  P <- nrow(C)
+  beta <- 0.5 * min(diag(C))
+  lambda <- 0.01
+  iters <- 2000
   
   # Initialization
-  eig <- eigen(C - beta * diag(P))
-  a_est <- eig$vectors[, P] * sqrt(eig$values[P]) # initialize a
-  a_est <- a_est * sign(a_est) # assuming '+' sign'
+  eig_result <- eigen(C - beta * diag(P))
+  V <- eig_result$vectors
+  D <- eig_result$values
+  a_est <- V[, 1] * sqrt(D[1])
+  a_est <- a_est * sign(a_est)
   a_init <- a_est
   
   # Iterations
@@ -173,13 +184,40 @@ SNRest <- function(ExxT, Ey2) {
         grad[j] <- grad[j] + (j != k) * a_est[k] * sign(a_est[j] * a_est[k] - C[j, k])
       }
     }
-    # descent
-    a_est <- a_est - (lamda / norm(a_init)) * grad
-    # project
-    a_est <- a_est - sign(a_est) * sqrt(pmax(a_est^2 - diag(C), 0))
+    # Descent
+    a_est <- a_est - (lambda / norm(a_init, type = "2")) * grad
+    
+    # Project
+    a_est <- a_est - sign(a_est) * sqrt(pmax((a_est ^ 2 - diag(C)), 0))
   }
   
-  N_est <- C - outer(a_est, a_est)
+  # Calculate N_est
+  N_est <- C - a_est %*% t(a_est)
+  a_est <- matrix(a_est, nrow = P, ncol = 1, byrow = TRUE)
   
   return(list(N_est = N_est, a_est = a_est))
+}
+
+
+# EeeTGEN function
+# This function is to error covarance matrix
+#
+# INPUT
+#   p = number of datasets (scalar)
+#   ecc = error cross-correlation (scalar, [0,1])
+#
+# OUTPUT
+#   EeeT = Error covarance matrix (pxp)
+EeeTGEN <- function(p, ecc) {
+  b <- combn(p, 2) # combination pairs, e.g., for p=3, (0,1), (0,2), (1,2)
+  
+  # Error covariance matrix: EeeT
+  EeeT <- diag(runif(p)) # error variances
+  for (i in 1:ncol(b)) {
+    EeeT[b[1,i], b[2,i]] <- sqrt(EeeT[b[1,i], b[1,i]] * EeeT[b[2,i], b[2,i]]) * ecc
+  }
+  
+  EeeT <- (EeeT + t(EeeT)) - diag(diag(EeeT)) # flipping
+  
+  return(EeeT)
 }
