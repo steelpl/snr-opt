@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 MATLAB scripts/mergingExample_the.asv
 *.csv
+*.asv
