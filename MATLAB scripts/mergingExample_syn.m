@@ -41,9 +41,9 @@ SNRdB = 0.1; % SNR in dB
 % SNRdB_actual = snr(y, e(:,1)); % for checking produced SNR
 
 % Observation: x = a*signal + error
-% x = y*a' + e; 
-b = rand(p,1); % additive bias (for test)
-x = y*a' + e + b'; 
+x = y*a' + e; 
+% b = rand(p,1); % additive bias (for test)
+% x = y*a' + e + b'; 
 
 % Signal power and covariance matrices of e and x
 Ey2 = var(y);
