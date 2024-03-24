@@ -1,10 +1,10 @@
-function [EeeT_est, theta_est, rho2_est] = ECVest(ExxT)
+function [EeeT_est, theta_est, rho2_est] = ECVest(covx)
 %% This function is a modified version of SNRest to estimate TC-like results
-% Version 2 (updated on 13 Apr 2023)
+% Version 3 (updated on 23 Mar 2024)
 % Update details: same results but with more detailed steps
 %
 % INPUT
-%   ExxT = covariance matrix of x (p x p)
+%   covx = covariance matrix of x (p x p)
 %
 % OUTPUT 
 %   EeeT_est = estimated error covariance matrix (p x p)
@@ -23,44 +23,34 @@ function [EeeT_est, theta_est, rho2_est] = ECVest(ExxT)
 %
 %% Estimation
 % Parameters
-p = size(ExxT,1); % number of products
-beta = 0.5*min(diag(ExxT)); % tuning parameter for initial a (should be < any of ExxT diagonals)
-% beta = 0.1; % tuning parameter for uninitializing a (should be < any of ExxT diagonals)
+p = size(covx,1); % number of products
+beta = 0.5*min(diag(covx)); % tuning parameter for initial theta (should be < any of covx diagonals)
 lamda = 0.01; % learning rate
 iters = 2000; % number of iterations
 
 % Initialization
-[V,D] = eig(ExxT-beta*eye(p)); % V: eigen (column) vectors; D: eigen values (diagonals)
+[V,D] = eig(covx-beta*eye(p)); % V: eigen (column) vectors; D: eigen values (diagonals)
 theta_est = V(:,end)*sqrt(D(end)); % initialize theta
 theta_est = theta_est .* sign(theta_est);  % assuming '+' sign
 theta_init = theta_est;
+lamda = lamda/norm(theta_init); % normalizing lamda considering the norm of theta_init
+eta = ones(p,1);
 
 % Iteration
 for i = 1:iters
     % Calculate gradient of the cost function
-    grad = zeros(p,1);
-    for j = 1:p
-        % Calculate the inner summation term of the gradient for j-th element
-        grad_j = 0;
-        for k = 1:p % Loop through the indices of the gradient vector again            
-            if j~=k % Only update the gradient if j is not equal to k (off-diagonals)
-                prod = theta_est(j)*theta_est(k); % Calculate the product of the j-th and k-th entries of theta_est
-                diff = prod - ExxT(j,k); % Calculate the difference between the product and the corresponding entry of ExxT                
-                grad_j = grad_j + theta_est(k)*sign(diff); % Add the contribution of the k-th entry to the j-th element of the gradient
-            end
-        end        
-        grad(j) = grad_j; % Store the value of the j-th element of the gradient
-    end
+    grad = ((eta*eta'-eye(p)).*sign(theta_est*theta_est'-covx))*theta_est;
+
     % Update theta_est using gradient descent
-    theta_est = theta_est - (lamda/norm(theta_init))*grad;
+    theta_est = theta_est - lamda*grad;
 
     % Projecting non-negativity constraint on the updated theta_est values
-    theta_est = theta_est - sign(theta_est) .* sqrt(max((theta_est.^2 - diag(ExxT)),0));         
+    theta_est = theta_est - sign(theta_est) .* sqrt(max(diag(theta_est*theta_est'-covx),0));    
     
 end
 
 % Calculate EeeT_est and rho2_est using theta_est
-EeeT_est = ExxT - theta_est*theta_est';
-rho2_est = (theta_est.^2)./diag(ExxT);
+EeeT_est = covx - theta_est*theta_est';
+rho2_est = diag((theta_est*theta_est')./covx);
 
 end
