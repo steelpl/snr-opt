@@ -4,7 +4,7 @@ function [N_est,a_est] = SNRest(ExxT, Ey2)
 % Update details: same results but with more detailed steps
 %
 % INPUT
-%   covx = covariance matrix of x (p x p)
+%   ExxT = covariance matrix of x after removing its mean values(p x p)
 %   Ey2 = signal power (scalar)
 %
 % OUTPUT

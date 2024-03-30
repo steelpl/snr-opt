@@ -8,8 +8,8 @@ function [y,e] = dataGEN(n,p,ecc,SNRdB)
 %   SNRdB = signal-to-noise ratio in dB (scalar)
 %
 % OUTPUT
-%   y = signal (nx1)
-%   e = error (nxp)
+%   y = signal (nx1) zero mean
+%   e = error (nxp) zero mean 
 %
 % REFERENCE
 % For more details, see:

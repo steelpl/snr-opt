@@ -41,19 +41,17 @@ SNRdB = 0.1; % SNR in dB
 % SNRdB_actual = snr(y, e(:,1)); % for checking produced SNR
 
 % Observation: x = a*signal + error
-x = y*a' + e; 
-% b = rand(p,1); % additive bias (for test)
-% x = y*a' + e + b'; 
+x = y*a' + e;
 
 % Signal power and covariance matrices of e and x
-Ey2 = var(y);
-EeeT = cov(e);
-covx = cov(x);
+Ey2 = var(y); % signal power, E[y^2] = var(y) because E[y]=0
+EeeT = cov(e); % E[eeT] = cov(e) because E[e]=0
+ExxT = cov(x); % E[xxT] = cov(x) because E[x]=0
 N = EeeT./Ey2; % error-to-signal ratio
 
 % Functions of MSE and R2 by linear combination using u
-MSE = @(u) u'*covx*u - 2*Ey2*u'*a + Ey2; % mean squared error
-R2 = @(u) Ey2*((u'*(a*a')*u)./(u'*covx*u)); % squared Pearson correlation
+MSE = @(u) u'*ExxT*u - 2*Ey2*u'*a + Ey2; % mean squared error
+R2 = @(u) Ey2*((u'*(a*a')*u)./(u'*ExxT*u)); % squared Pearson correlation
 
 % RMSE of observations
 MSE_ori = diag(MSE(eye(p)))';
@@ -73,7 +71,7 @@ disp([' * R2 for x: ',num2str(round(R2_ori,3))])
 % merging by three methods
 uw = WA(EeeT);yw = x*uw; % weighted average
 us = SNRopt(N,a); ys = x*us;% SNR-opt
-ur = maxR(a,covx); yr = x*ur;% maxR weight
+ur = maxR(a,ExxT); yr = x*ur;% maxR weight
 ue = 1/p*ones(p,1);ye = x*ue;% equal weight 
 s = diag(((eta'*(EeeT\eta))/(1/Ey2+a'*(EeeT\a)))*a); % us = s*uw (eq. 9)
 
@@ -92,13 +90,14 @@ disp([' * R2 for WA, SNRopt, maxR, EW: ',num2str(round(R2_true,3))])
 %% Step 4: Merging using estimated parameters
 % Estimation of merging statistics
 Ey2_est = Ey2*0.5; % roughly estimated signal power (e.g., reanalysis, var(mean(x,2)). Here, 0.5 of the true Ey2 is arbitrarily selected.
+covx=cov(x);
 [EeeT_est,theta_est,rho2_est] = ECVest(covx); % modified SNRest for TC-like estimation
-[N_est,a_est] = SNRest(covx, Ey2_est); % SNR-est
+[N_est,a_est] = SNRest(ExxT, Ey2_est); % SNR-est
 
 % merging by three methods
 uw_est = WA(EeeT_est);yw_est = x*uw_est; % weighted average
 us_est = SNRopt(N_est,a_est); ys_est = x*us_est;% SNR-opt
-ur_est = maxR(a_est,covx); yr_est = x*ur_est;% maxR weight
+ur_est = maxR(a_est,ExxT); yr_est = x*ur_est;% maxR weight
 s_est = diag(((eta'*(EeeT\eta))/(1/Ey2+a_est'*(EeeT\a_est)))*a_est); % us = s*uw (eq. 9)
 
 % RMSE of data merged by estimated parameters

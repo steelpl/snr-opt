@@ -39,7 +39,7 @@ SNRdB = 0.1; % SNR in dB
 EeeT = EeeTGEN(p,ecc); % error covariance matrix
 SNR = 10^(SNRdB/10); % SNR conversion
 Ey2 = mean(diag(EeeT)*SNR); % Signal power based on given SNR and EeeT
-ExxT = EeeT+Ey2*(a*a');
+ExxT = EeeT+Ey2*(a*a'); % E[xxT] = cov(x) because E[x]=0
 N = EeeT./Ey2; % error-to-signal ratio
 
 % Functions of MSE and R2 by linear combination using u
@@ -80,7 +80,8 @@ disp([' * R2 for WA, SNRopt, maxR, EW: ',num2str(round(R2_true,3))])
 %% Step 4: Merging using estimated parameters
 % merging statistics
 Ey2_est = Ey2*0.5; % roughly estimated signal power (e.g., reanalysis, var(mean(x,2)). Here, 0.5 of the true Ey2 is arbitrarily selected.
-[EeeT_est,theta_est,rho2_est] = ECVest(ExxT); % modified SNRest for TC-like estimation
+covx=ExxT; % cov(x) = E[xxT] because E[x]=0
+[EeeT_est,theta_est,rho2_est] = ECVest(covx); % modified SNRest for TC-like estimation
 [N_est,a_est] = SNRest(ExxT, Ey2_est); % SNR-est
 
 % weight of three methods
