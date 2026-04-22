@@ -4,13 +4,13 @@ clear; clc
 p = 3;
 rng(123);
 
-ecc_list = [0:0.1:0.9,0.99];
+ecc_list = [0:0.05:0.95,0.99];
 nE = length(ecc_list);
 
 SNRdB = 0.1;
 SNR = 10^(SNRdB/10);
 
-nMC = 1000;
+nMC = 500;
 tol = 1e-10;
 
 %% Common random numbers across ecc
@@ -171,6 +171,10 @@ plot(ecc_list, mse_nc_med, 'b-', 'LineWidth',2)
 xlabel('ecc')
 ylabel('Error Variance MSE')
 title('MSE of Estimated Error Variance (TC vs NC)')
+
+ylim([0 0.5])
+yticks(0:0.1:0.5)
+
 legend('TC IQR','TC median','NC IQR','NC median','Location','northwest')
 grid on
 axis square 
@@ -179,8 +183,8 @@ axis square
 subplot(1,3,3)
 hold on
 
-plot(ecc_list, tc_fail_rate, 'r-o', 'LineWidth',2)
-plot(ecc_list, nc_fail_rate, 'b-o', 'LineWidth',2)
+plot(ecc_list, tc_fail_rate, 'r-*', 'LineWidth',2)
+plot(ecc_list, nc_fail_rate, 'b-*', 'LineWidth',2)
 
 xlabel('ecc')
 ylabel('Failure rate (%)')
