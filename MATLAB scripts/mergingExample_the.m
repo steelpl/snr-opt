@@ -14,9 +14,9 @@ clear; clc
 % REFERENCE
 % For more details, see:
 %
-% Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021).
-% Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-% IEEE Trans Geosci Remote Sens
+%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
+%   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
+%   IEEE Trans Geosci Remote Sens., 60, 1–15.
 %
 % If you use the methods presented in the paper and/or this example,
 % please cite this paper where appropriate.
