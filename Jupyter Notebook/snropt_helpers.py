@@ -2,9 +2,6 @@ import numpy as np
 
 
 def eeeT_gen(p: int, ecc: float, var_e=None, tol: float = 1e-10) -> np.ndarray:
-    """
-    Generate a synthetic error covariance matrix.
-    """
     if p < 1:
         raise ValueError("p must be a positive integer.")
     ecc = float(np.clip(ecc, 0.0, 1.0))
@@ -30,9 +27,6 @@ def eeeT_gen(p: int, ecc: float, var_e=None, tol: float = 1e-10) -> np.ndarray:
 
 
 def data_gen(n: int, p: int, ecc: float, snr_db: float, tol: float = 1e-10):
-    """
-    Generate zero-mean signal and error time series with prescribed covariance structure.
-    """
     if n <= 1:
         raise ValueError("n must be greater than 1.")
     snr = 10 ** (snr_db / 10.0)
@@ -58,8 +52,12 @@ def data_gen(n: int, p: int, ecc: float, snr_db: float, tol: float = 1e-10):
     vals_c = np.maximum(vals_c, tol)
     C = vecs_c @ np.diag(vals_c) @ vecs_c.T
 
-    ye = ye @ np.linalg.cholesky(np.linalg.inv(C))
-    ye = ye @ np.linalg.cholesky(m)
+    # MATLAB chol returns upper triangular R such that A = R.T @ R
+    Rc = np.linalg.cholesky(C).T
+    Rm = np.linalg.cholesky(m).T
+
+    ye = ye @ np.linalg.inv(Rc)
+    ye = ye @ Rm
 
     y = ye[:, 0]
     e = ye[:, 1:]
@@ -67,9 +65,6 @@ def data_gen(n: int, p: int, ecc: float, snr_db: float, tol: float = 1e-10):
 
 
 def wa(EeeT: np.ndarray) -> np.ndarray:
-    """
-    Error-covariance-weighted average.
-    """
     EeeT = 0.5 * (EeeT + EeeT.T)
     eta = np.ones((EeeT.shape[0], 1))
     tmp = np.linalg.solve(EeeT, eta)
@@ -78,9 +73,6 @@ def wa(EeeT: np.ndarray) -> np.ndarray:
 
 
 def maxR(theta: np.ndarray, Q: np.ndarray) -> np.ndarray:
-    """
-    Correlation-maximizing weights.
-    """
     theta = np.asarray(theta, dtype=float).reshape(-1, 1)
     Q = 0.5 * (Q + Q.T)
     u = np.linalg.solve(Q, theta).ravel()
@@ -90,56 +82,29 @@ def maxR(theta: np.ndarray, Q: np.ndarray) -> np.ndarray:
     return u
 
 
-def snr_opt(N: np.ndarray, a: np.ndarray, normalize: str = "ua") -> np.ndarray:
-    """
-    SNR-optimal weights in normalized covariance space.
-
-    Parameters
-    ----------
-    N : np.ndarray
-        Noise-to-signal ratio matrix.
-    a : np.ndarray
-        Scaling factor vector.
-    normalize : {"ua", "sum", None}, default="ua"
-        Normalization rule.
-        - "ua"  : enforce u^T a = 1  (recommended for unbiased comparison)
-        - "sum" : enforce sum(u) = 1
-        - None  : no normalization
-    """
+def snr_opt(N: np.ndarray, a: np.ndarray) -> np.ndarray:
     a = np.asarray(a, dtype=float).reshape(-1, 1)
     N = 0.5 * (N + N.T)
-
-    u = np.linalg.solve(N + a @ a.T, a).ravel()
-
-    if normalize == "ua":
-        den = float(u @ a.ravel())
-        if abs(den) > 1e-12:
-            u = u / den
-    elif normalize == "sum":
-        s = u.sum()
-        if abs(s) > 1e-12:
-            u = u / s
-    elif normalize is None:
-        pass
-    else:
-        raise ValueError("normalize must be one of {'ua', 'sum', None}.")
-
-    return u
+    u = np.linalg.solve(N + a @ a.T, a)
+    return u.ravel()
 
 
 def snr_est(ExxT: np.ndarray, Ey2: float, tol: float = 1e-12):
-    """
-    Estimate normalized signal scaling vector a and noise-to-signal matrix N
-    from covariance ExxT and signal power Ey2.
-    """
+    ExxT = np.asarray(ExxT, dtype=float)
+
+    if ExxT.ndim != 2 or ExxT.shape[0] != ExxT.shape[1]:
+        raise ValueError("ExxT must be a square matrix.")
     if Ey2 <= 0:
         raise ValueError("Ey2 must be positive.")
+
     Q = 0.5 * (ExxT + ExxT.T)
     C = Q / Ey2
     p = C.shape[0]
+
     diagC = np.diag(C)
     if np.any(diagC <= 0):
         raise ValueError("Normalized covariance has non-positive diagonal entries.")
+
     sqrtDiagC = np.sqrt(diagC)
 
     beta = 0.5 * np.min(diagC)
@@ -149,10 +114,14 @@ def snr_est(ExxT: np.ndarray, Ey2: float, tol: float = 1e-12):
     vals, vecs = np.linalg.eigh(C - beta * np.eye(p))
     idx = np.argmax(vals)
     a_est = np.sqrt(max(vals[idx], 0.0)) * vecs[:, idx]
-    a_est = np.sign(a_est) * np.abs(a_est)
+
+    # same role as MATLAB sign-consistency step
+    a_est = np.abs(a_est)
+
     step = step / max(np.linalg.norm(a_est), 1e-8)
 
     mask = np.ones((p, p)) - np.eye(p)
+
     for _ in range(iters):
         A = np.outer(a_est, a_est)
         S = np.sign(A - C)
@@ -163,16 +132,15 @@ def snr_est(ExxT: np.ndarray, Ey2: float, tol: float = 1e-12):
 
     N_est = C - np.outer(a_est, a_est)
     N_est = 0.5 * (N_est + N_est.T)
+
     d = np.diag(N_est).copy()
     d[(d < 0) & (d > -tol)] = 0.0
     N_est[np.diag_indices(p)] = d
+
     return N_est, a_est
 
 
 def nc(covx: np.ndarray, tol: float = 1e-12):
-    """
-    N-Tuple Collocation (NC): constrained rank-1 approximation of covariance matrix.
-    """
     Q = 0.5 * (covx + covx.T)
     p = Q.shape[0]
     diagQ = np.diag(Q)
@@ -210,9 +178,6 @@ def nc(covx: np.ndarray, tol: float = 1e-12):
 
 
 def evaluate_metrics(ExxT: np.ndarray, Ey2: float, a: np.ndarray, U: np.ndarray):
-    """
-    Evaluate MSE and R^2 for one or more weight vectors.
-    """
     a = np.asarray(a, dtype=float).reshape(-1, 1)
     U = np.asarray(U, dtype=float)
     if U.ndim == 1:
