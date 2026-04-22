@@ -131,7 +131,8 @@ https://doi.org/10.1109/TGRS.2021.3107028
 
 ## Author
 
-Seokhyeon Kim
-(on behalf of all coauthors)
+Seokhyeon Kim  
+(on behalf of all coauthors)  
 Kyung Hee University  
-Water Resources and Environment Big Data Lab (WreBigDL)
+Water Resources and Environment Big Data Lab (WreBigDL)  
+https://sites.google.com/view/wrebigdl/
