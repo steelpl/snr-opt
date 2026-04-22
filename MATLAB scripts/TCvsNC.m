@@ -169,8 +169,8 @@ fill([ecc_list fliplr(ecc_list)], ...
 plot(ecc_list, mse_nc_med, 'b-', 'LineWidth',2)
 
 xlabel('ecc')
-ylabel('MSE vs TRUE')
-title('MSE Comparison')
+ylabel('Error Variance MSE')
+title('MSE of Estimated Error Variance (TC vs NC)')
 legend('TC IQR','TC median','NC IQR','NC median','Location','northwest')
 grid on
 axis square 
