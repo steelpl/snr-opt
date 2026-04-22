@@ -1,4 +1,4 @@
-# SNR-opt: Reference-Free Multi-Source Data Fusion with Minimum MSE
+# # SNR-opt: Reference-Free Multi-Source Data Fusion Beyond TC-Based Merging
 
 This repository provides MATLAB and Python implementations accompanying:
 
