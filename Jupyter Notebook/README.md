@@ -1,46 +1,136 @@
-# SNRopt Modular Example
+# SNR-opt (Python Implementation)
 
-This repository contains a modular Python implementation of synthetic data generation, covariance-based parameter estimation, and data-merging methods for comparing WA, SNRopt, and maxR.
+This repository provides a Python implementation accompanying the paper:
 
-## Files
+Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022)  
+Rethinking Satellite Data Merging: From Averaging to SNR Optimization  
+IEEE Transactions on Geoscience and Remote Sensing, 60, 4405215  
+https://doi.org/10.1109/TGRS.2021.3107028
 
-- `SNRopt_modular.ipynb`  
-  Main practice notebook for running the workflow step by step.
+---
 
-- `snropt_helpers.py`  
-  Helper module containing the core functions used by the notebook.
+## Overview
 
-## Included Functions
+This repository implements and compares multiple data merging methods for multi-source observations:
 
-The helper module provides the following functions:
+- Weighted Averaging (WA)
+- SNR-optimal merging (SNRopt)
+- Correlation-maximizing merging (maxR)
+- Equal Weighting (EW)
 
-- `eeeT_gen(p, ecc, var_e=None, tol=1e-10)`  
-  Generates a synthetic error covariance matrix.
+It also provides tools for:
+- Synthetic data generation
+- Covariance-based parameter estimation
+- Performance evaluation using MSE and R²
 
-- `data_gen(n, p, ecc, snr_db, tol=1e-10)`  
-  Generates synthetic zero-mean signal and error time series.
+---
 
-- `wa(EeeT)`  
-  Computes weighted-average merging weights from the error covariance matrix.
+## Code Structure
 
-- `maxR(theta, Q)`  
-  Computes correlation-maximizing weights.
+The repository consists of one main notebook and one supporting module.
 
-- `snr_opt(N, a)`  
-  Computes SNR-optimal merging weights from the normalized signal-plus-noise representation.
+---
 
-- `snr_est(ExxT, Ey2, tol=1e-12)`  
-  Estimates the normalized scaling vector and noise-to-signal matrix.
+### Main Script
 
-- `nc(covx, tol=1e-12)`  
-  Estimates error covariance, signal scaling, and squared correlation using N-Tuple Collocation.
+1. **SNRopt_modular.ipynb**  
+   - Interactive example (time-series based)  
+   - Demonstrates full workflow step-by-step  
+   - Compares merging performance under true and estimated parameters  
 
-- `evaluate_metrics(ExxT, Ey2, a, U)`  
-  Evaluates MSE and R² for one or more weight vectors.
+---
+
+### Supporting Module
+
+1. **snropt_helpers.py**  
+   Provides all core functions required for the workflow:
+
+- **eeeT_gen(p, ecc, var_e=None, tol=1e-10)**  
+  Generates synthetic error covariance matrix  
+
+- **data_gen(n, p, ecc, snr_db, tol=1e-10)**  
+  Generates synthetic signal and error such that:
+
+$$
+x = a y + e
+$$
+
+- **wa(EeeT)**  
+  Computes merging weights using inverse error covariance  
+
+- **snr_opt(N, a)**  
+  Computes SNR-optimal weights by solving:
+
+$$
+(N + a a^T) u = a
+$$
+
+- **maxR(theta, Q)**  
+  Computes weights that maximize correlation with the true signal  
+
+- **snr_est(ExxT, Ey2, tol=1e-12)**  
+  Estimates:
+  - scaling factor $a$  
+  - noise-to-signal ratio matrix $N$  
+
+- **nc(covx, tol=1e-12)**  
+  Estimates:
+  - error covariance matrix  
+  - data–truth correlation  
+
+  Equivalent to Triple Collocation when $p = 3$,  
+  but stable for any number of datasets  
+
+- **evaluate_metrics(ExxT, Ey2, a, U)**  
+  Evaluates MSE and R² for given merging weights  
+
+---
+
+## Signal + Noise Model
+
+$$
+x = a y + e
+$$
+
+$$
+Q = E[xx^T] = a a^T E[y^2] + E[ee^T]
+$$
+
+---
+
+## SNR-based Decomposition
+
+$$
+C = \frac{Q}{E[y^2]}
+$$
+
+$$
+C = a a^T + N
+$$
+
+---
+
+## SNR-optimal Weights
+
+$$
+u = (N + a a^T)^{-1} a
+$$
+
+---
+
+## Typical Workflow
+
+1. Generate synthetic data  
+2. Compute covariance matrices  
+3. Estimate parameters (NC, SNRest)  
+4. Compute merging weights (WA, SNRopt, maxR, EW)  
+5. Evaluate performance using MSE and R²  
+
+---
 
 ## Requirements
 
-Install the required Python packages before running the notebook:
+Install required packages:
 
 ```bash
 pip install numpy matplotlib jupyter
