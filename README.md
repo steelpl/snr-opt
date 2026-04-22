@@ -3,8 +3,8 @@
 This repository provides MATLAB and Python implementations accompanying:
 
 Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).  
-Rethinking satellite data merging: from averaging to SNR optimization.  
-IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.  
+**Rethinking satellite data merging: from averaging to SNR optimization.**  
+*IEEE Transactions on Geoscience and Remote Sensing*, 60, 1–15.  
 https://doi.org/10.1109/TGRS.2021.3107028
 
 ---
@@ -123,8 +123,8 @@ This repository is intended to:
 If you use this code, please cite:
 
 Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).  
-Rethinking satellite data merging: from averaging to SNR optimization.  
-IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.  
+**Rethinking satellite data merging: from averaging to SNR optimization.**  
+*IEEE Transactions on Geoscience and Remote Sensing*, 60, 1–15.  
 https://doi.org/10.1109/TGRS.2021.3107028
 
 ---
