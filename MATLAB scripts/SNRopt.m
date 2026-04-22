@@ -35,9 +35,9 @@ function u = SNRopt(N,a)
 %     be interpreted as the normalized-space counterpart of maxR.
 %
 % REFERENCE
-%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021).
+%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens.
+%   IEEE Trans Geosci Remote Sens., 60, 1–15.
 %
 %   If you use this method, please cite the above reference.
 % ============================================================
