@@ -1,4 +1,4 @@
-# SNR-opt: Multi-Source Data Fusion via Signal-to-Noise Ratio Optimization
+# SNR-opt: Reference-Free Multi-Source Data Fusion with Minimum MSE
 
 This repository provides MATLAB and Python implementations accompanying:
 
