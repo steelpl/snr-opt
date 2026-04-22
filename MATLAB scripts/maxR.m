@@ -33,9 +33,9 @@ function u = maxR(theta, Q)
 %   - For ill-conditioned Q, regularization may be required.
 %
 % REFERENCE
-% Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021).
-% Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-% IEEE Trans Geosci Remote Sens.
+%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
+%   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
+%   IEEE Trans Geosci Remote Sens., 60, 1–15.
 %
 % Also related to classical Rayleigh quotient optimization:
 % Horn, R. A., & Johnson, C. R. (2013).
