@@ -1,4 +1,4 @@
-# SNR-opt: Satellite Data Merging
+# SNR-opt: Multi-Source Data Fusion via Signal-to-Noise Ratio Optimization
 
 This repository provides MATLAB and Python implementations accompanying:
 
