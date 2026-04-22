@@ -55,7 +55,8 @@ $$
 
 ```text
 ├── Jupyter Notebook/
-│ └── SNRopt_modular.ipynb
+│ ├── SNRopt_modular.ipynb
+│ └── snropt_helpers.py
 ├── MATLAB scripts/
 │ ├── mergingExample_the.m
 │ ├── mergingExample_syn.m
@@ -130,6 +131,7 @@ https://doi.org/10.1109/TGRS.2021.3107028
 
 ## Author
 
-Seokhyeon Kim  
+Seokhyeon Kim
+(on behalf of all coauthors)
 Kyung Hee University  
 Water Resources and Environment Big Data Lab (WreBigDL)
