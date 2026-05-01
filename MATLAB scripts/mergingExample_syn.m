@@ -14,16 +14,16 @@ clear; clc
 % REFERENCE
 % For more details, see:
 %
-%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
-%   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+% Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2021). 
+% Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
+% IEEE Trans Geosci Remote Sens
 %
 % If you use the methods presented in the paper and/or this example, 
 % please cite this paper where appropriate.
 %
 %% Step 1: Data parameters
 p = 3; % number of datasets
-n = 100; % data length
+n = 1000; % data length
 eta = ones(p,1);
 rng(123); % random seed
 
@@ -50,15 +50,15 @@ ExxT = cov(x); % E[xxT] = cov(x) because E[x]=0
 N = EeeT./Ey2; % error-to-signal ratio
 
 % Functions of MSE and R2 by linear combination using u
-MSE = @(u) diag(u'*ExxT*u - 2*Ey2*u'*a + Ey2); % mean squared error
-R2 = @(u) diag(Ey2*((u'*(a*a')*u)./max(u'*ExxT*u,1e-12))); % squared Pearson correlation
+MSE = @(u) u'*ExxT*u - 2*Ey2*u'*a + Ey2; % mean squared error
+R2 = @(u) Ey2*((u'*(a*a')*u)./(u'*ExxT*u)); % squared Pearson correlation
 
 % RMSE of observations
-MSE_ori = MSE(eye(p))';
+MSE_ori = diag(MSE(eye(p)))';
 % MSE_ori = mean((y-x).^2);
 
 % Pearson correaltion of observations
-R2_ori = R2(eye(p))'; 
+R2_ori = diag(R2(eye(p)))'; 
 % R2_ori = corr(y,x).^2; 
 
 % Printing metrics
@@ -73,47 +73,39 @@ uw = WA(EeeT);yw = x*uw; % weighted average
 us = SNRopt(N,a); ys = x*us;% SNR-opt
 ur = maxR(a,ExxT); yr = x*ur;% maxR weight
 ue = 1/p*ones(p,1);ye = x*ue;% equal weight 
-
-EeeT_inv_eta = EeeT\eta;
-EeeT_inv_a   = EeeT\a;
-
-s = diag(((eta'*EeeT_inv_eta)/(1/Ey2 + a'*EeeT_inv_a))*a); % us = s*uw (eq. 9)
+s = diag(((eta'*(EeeT\eta))/(1/Ey2+a'*(EeeT\a)))*a); % us = s*uw (eq. 9)
 
 % RMSE of data merged by true parameters
-MSE_true = MSE([uw,us,ur,ue])';
+MSE_true = diag(MSE([uw,us,ur,ue]))';
 % MSE_true = mean((y-[yw,ys,yr,ye]).^2); 
 
 % Pearson correaltion of data merged by true parameters
-R2_true = R2([uw,us,ur,ue])';
+R2_true = diag(R2([uw,us,ur,ue]))';
 % R2_true = corr(y,[yw,ys,yr,ye]).^2; 
 
 % Printing metrics
 disp([newline,'+ Metrics for merged data by ''true'' parameters'])
 disp([' * MSE for WA, SNRopt, maxR, EW: ',num2str(round(MSE_true,3))])
 disp([' * R2 for WA, SNRopt, maxR, EW: ',num2str(round(R2_true,3))])
-
 %% Step 4: Merging using estimated parameters
 % Estimation of merging statistics
 Ey2_est = Ey2*0.5; % roughly estimated signal power (e.g., reanalysis, var(mean(x,2)). Here, 0.5 of the true Ey2 is arbitrarily selected.
 covx=cov(x);
-[EeeT_est, theta_est, rho2_est] = NC(covx);
+[EeeT_est,theta_est,rho2_est] = ECVest(covx); % modified SNRest for TC-like estimation
 [N_est,a_est] = SNRest(ExxT, Ey2_est); % SNR-est
 
 % merging by three methods
 uw_est = WA(EeeT_est);yw_est = x*uw_est; % weighted average
 us_est = SNRopt(N_est,a_est); ys_est = x*us_est;% SNR-opt
 ur_est = maxR(a_est,ExxT); yr_est = x*ur_est;% maxR weight
-
-EeeT_inv_a_est = EeeT\a_est;
-
-s_est = diag(((eta'*EeeT_inv_eta)/(1/Ey2_est + a_est'*EeeT_inv_a_est))*a_est); % us = s*uw (eq. 9)
+s_est = diag(((eta'*(EeeT\eta))/(1/Ey2+a_est'*(EeeT\a_est)))*a_est); % us = s*uw (eq. 9)
 
 % RMSE of data merged by estimated parameters
-MSE_est = MSE([uw_est,us_est,ur_est,ue])';
+MSE_est = diag(MSE([uw_est,us_est,ur_est,ue]))';
 % MSE_est = mean((y-[yw_est,ys_est,yr_est,ye]).^2);
 
 % Pearson correaltion of data merged by estimated parameters
-R2_est = R2([uw_est,us_est,ur_est,ue])';
+R2_est = diag(R2([uw_est,us_est,ur_est,ue]))';
 % R2_est = corr(y,[yw_est,ys_est,yr_est,ye]).^2;
 
 % Printing metrics
