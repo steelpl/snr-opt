@@ -29,7 +29,8 @@ function EeeT = EeeTGEN(p,ecc,var_e)
 %
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+%   IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 %
 % If you use the methods presented in the paper and/or this example, 
 % please cite this paper where appropriate.
@@ -65,22 +66,8 @@ tol = 1e-10;
 %% ---------- Covariance construction ----------
 % Combination pairs, e.g. for p = 3:
 % (1,2), (1,3), (2,3)
-b = nchoosek(1:p,2);
-
-% Initialize with diagonal error variances.
-EeeT = diag(var_e);
-
-% Fill off-diagonal entries using the prescribed common
-% error cross-correlation coefficient.
-for i = 1:size(b,1)
-    ii = b(i,1);
-    jj = b(i,2);
-
-    val = sqrt(var_e(ii) * var_e(jj)) * ecc;
-
-    EeeT(ii,jj) = val;
-    EeeT(jj,ii) = val;
-end
+sd = sqrt(var_e);
+EeeT = (1 - ecc) * diag(var_e) + ecc * (sd * sd');
 
 %% ---------- Numerical cleanup ----------
 % Enforce symmetry explicitly to suppress tiny asymmetry caused by

@@ -34,7 +34,8 @@ function [y,e] = dataGEN(n,p,ecc,SNRdB)
 %
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+%   IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 %
 % If you use the methods presented in the paper and/or this example, 
 % please cite this paper where appropriate.
@@ -62,30 +63,7 @@ SNR = 10^(SNRdB/10);
 ecc = max(0, min(1, ecc));   % keep ecc within [0,1]
 tol = 1e-10;
 
-b = nchoosek(1:p,2); % combination pairs e.g. for p=3, (1,2), (1,3), (2,3)
-
-%% ---------- Error covariance construction ----------
-% Random error variances for each dataset.
-var_e = rand(p,1);
-
-% Initialize EeeT with diagonal variances.
-EeeT = diag(var_e);
-
-% Set pairwise error covariance using a common correlation coefficient ecc.
-for i = 1:size(b,1)
-    ii = b(i,1);
-    jj = b(i,2);
-    
-    val = sqrt(var_e(ii)*var_e(jj)) * ecc;
-    EeeT(ii,jj) = val;
-    EeeT(jj,ii) = val;
-end
-
-% Symmetry cleanup and numerical PSD enforcement.
-EeeT = (EeeT + EeeT') / 2;
-[V,D] = eig(EeeT);
-D = max(D, tol*eye(p));
-EeeT = V * D * V';
+EeeT = EeeTGEN(p,ecc);
 
 %% ---------- Target joint covariance ----------
 % Signal power is chosen to match the prescribed SNR relative to the

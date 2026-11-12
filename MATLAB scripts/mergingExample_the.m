@@ -16,7 +16,11 @@ clear; clc
 %
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+%   IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.
+%   https://doi.org/10.1109/TGRS.2021.3107028
+%
+%   Pham, H. T., & Kim, S. (2027). Journal of Hydrology, 682, 136749.
+%   https://doi.org/10.1016/j.jhydrol.2026.136749
 %
 % If you use the methods presented in the paper and/or this example,
 % please cite this paper where appropriate.
@@ -24,7 +28,6 @@ clear; clc
 
 %% ---------- Step 1: Data parameters ----------
 p = 5;                 % number of datasets
-eta = ones(p,1);
 rng(123);              % random seed
 
 %%%%%%%%% scaling factor (a)%%%%%%%%%%%%%%
@@ -49,12 +52,12 @@ N = EeeT./Ey2;                     % error-to-signal ratio matrix
 % Functions of MSE and R2 by linear combination using u.
 % These definitions support both a single weight vector (p x 1) and a
 % matrix of weight vectors (p x m), returning one value per column.
-MSE = @(u) diag(u'*ExxT*u - 2*Ey2*u'*a + Ey2);
-R2  = @(u) diag(Ey2*((u'*(a*a')*u) ./ max(u'*ExxT*u, 1e-12)));
+MSE = @(u) sum(u.*(ExxT*u),1) - 2*Ey2*(a'*u) + Ey2;
+R2 = @(u) Ey2*(a'*u).^2 ./ sum(u.*(ExxT*u),1);
 
 % Performance of individual datasets
-MSE_ori = MSE(eye(p))';
-R2_ori  = R2(eye(p))';
+MSE_ori = MSE(eye(p));
+R2_ori  = R2(eye(p));
 
 % Display original performance
 disp('+ Metrics for original data')
@@ -70,14 +73,9 @@ us = SNRopt(N,a);         % SNR-opt
 ur = maxR(a,ExxT);        % maxR weight
 ue = ones(p,1)/p;         % equal weight
 
-% Relation between WA and SNRopt (eq. 9 in the reference)
-EeeT_inv_eta = EeeT\eta;
-EeeT_inv_a   = EeeT\a;
-s = diag(((eta'*EeeT_inv_eta)/(1/Ey2 + a'*EeeT_inv_a))*a); % us = s*uw
-
 % Performance of merged data using true parameters
-MSE_true = MSE([uw,us,ur,ue])';
-R2_true  = R2([uw,us,ur,ue])';
+MSE_true = MSE([uw,us,ur,ue]);
+R2_true  = R2([uw,us,ur,ue]);
 
 % Display merged performance
 disp([newline,'+ Metrics for merged data by ''true'' parameters'])
@@ -88,27 +86,20 @@ disp([' * R2 for WA, SNRopt, maxR, EW: ', num2str(round(R2_true,3))])
 % This section evaluates the practical case in which the required
 % statistics are not known and must be estimated.
 
-Ey2_est = Ey2*0.5;        % rough estimate of signal power
-covx = ExxT;              % cov(x) = E[xxT] because E[x]=0
+Ey2_est = 0.5 * Ey2; % deliberately rough external-scale proxy in this simulation
+[N_est, a_est, snr_est, fit] = SNRest(ExxT, Ey2_est);
 
-% Estimated quantities
-[EeeT_est, theta_est, rho2_est] = NC(covx);
-[N_est, a_est] = SNRest(ExxT, Ey2_est);
+% Reuse the same fitted error and observation covariances for all weights.
+uw_est = WA(fit.errorCov,fit.info.covarianceScale);
+us_est = SNRopt(N_est,a_est);
+ur_est = maxR(fit.theta,fit.covariance);
 
-% Merging weights based on estimated parameters
-uw_est = WA(EeeT_est);        % weighted average
-us_est = SNRopt(N_est,a_est); % SNR-opt
-ur_est = maxR(a_est,ExxT);    % maxR weight
+MSE_est = MSE([uw_est,us_est,ur_est,ue]);
+R2_est = R2([uw_est,us_est,ur_est,ue]);
 
-% Relation between WA and SNRopt under estimated parameters
-EeeT_inv_a_est = EeeT\a_est;
-s_est = diag(((eta'*EeeT_inv_eta)/(1/Ey2_est + a_est'*EeeT_inv_a_est))*a_est); % us = s*uw
+fprintf('\nNC min eig(E): %.6g\n', fit.info.minErrorCovEigenvalue);
+fprintf('NC linear SNR by product: %s\n', mat2str(snr_est',4));
 
-% Performance of merged data using estimated parameters
-MSE_est = MSE([uw_est,us_est,ur_est,ue])';
-R2_est  = R2([uw_est,us_est,ur_est,ue])';
-
-% Display merged performance
 disp([newline,'+ Metrics for merged data by ''estimated'' parameters'])
 disp([' * MSE for WA, SNRopt, maxR, EW: ', num2str(round(MSE_est,3))])
 disp([' * R2 for WA, SNRopt, maxR, EW: ', num2str(round(R2_est,3))])
@@ -127,7 +118,7 @@ figure('Units','normalized','Position',[0 0 1 1])
 subplot(1,2,1)
 bar(MSE_results')
 ylabel('MSE')
-legend('Original','Merged by true prm','Merged by est prm')
+legend('Original','Merged by true prm','Merged using NC')
 title('MSE')
 set(gca,'xticklabel',method)
 axis square

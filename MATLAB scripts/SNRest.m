@@ -1,144 +1,43 @@
-function [N_est,a_est] = SNRest(ExxT, Ey2)
-% ============================================================
-% SNR-based decomposition (SNRest)
-% Rank-1 signal extraction from normalized covariance
+function [N_est, a_est, snr_est, fit] = SNRest(ExxT, Ey2, opts)
+%SNREST Estimate SNR and merging parameters from one NC covariance fit.
+%   [N,A] = SNRest(Q,Ey2) preserves the normalized decomposition interface.
+%   Q is the covariance of collocated, centered products. Ey2 is the
+%   positive target signal variance. Omit it or pass [] for a unit-variance
+%   latent target. OPTS is forwarded to NC.
 %
-% INPUT
-%   ExxT : covariance matrix of observations (p x p)
-%   Ey2  : signal power (scalar)
+%   [N,A,SNR,FIT] also returns the linear SNR per product and NC outputs.
+%   FIT contains errorCov, theta, rho2, covariance (used by NC), and info.
+%   N = errorCov/Ey2, A = theta/sqrt(Ey2), SNR = theta.^2./diag(errorCov).
+%   The loading with largest magnitude is oriented positive by convention.
+%   To align to a known opposite direction, flip A and FIT.theta together.
+%   Zero error with positive signal gives Inf. Zero total variance gives NaN.
 %
-% OUTPUT
-%   N_est : estimated noise-to-signal ratio matrix (p x p)
-%   a_est : estimated scaling factor vector (p x 1)
-%
-% METHOD
-%   The method operates on the normalized covariance:
-%
-%       C = ExxT / Ey2
-%
-%   and estimates a rank-1 signal structure:
-%
-%       C ≈ a a^T + N
-%
-%   by minimizing the off-diagonal mismatch of (C - a a^T)
-%   using projected subgradient descent.
-%
-%   The constraint
-%
-%       a_i^2 ≤ C_ii
-%
-%   ensures non-negative noise variances:
-%
-%       diag(N_est) = C_ii - a_i^2 ≥ 0
-%
-% RELATION TO NC FRAMEWORK
-%   SNRest is the normalized counterpart of the NC formulation:
-%
-%       Q = θ θ^T + Σ_e
-%
-%   with the relation:
-%
-%       θ = a * sqrt(Ey2)
-%
-%   Thus, SNRest can be interpreted as a special case of NC
-%   applied to normalized covariance space.
-%
-% NOTES
-%   - The solution is not unique in scale; it is tied to Ey2.
-%   - The algorithm is robust to moderate error cross-correlation.
-%   - Projection guarantees physically feasible diagonal estimates.
-%
-% REFERENCE
-%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
-%   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
-%
-%   If you use this method, please cite the above reference.
-% ============================================================
+%   Pham, H. T., & Kim, S. (2027). Journal of Hydrology, 682, 136749.
+%   https://doi.org/10.1016/j.jhydrol.2026.136749
+%   Kim et al. (2022). IEEE Transactions on Geoscience and Remote Sensing, 60.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 
-%% ---------- Input check ----------
-if nargin < 2
-    error('SNRest requires two inputs: ExxT and Ey2.');
+if nargin < 2 || isempty(Ey2)
+    Ey2 = 1;
+end
+validateattributes(Ey2, {'numeric'}, {'real','scalar','finite','positive'}, ...
+    'SNRest', 'Ey2', 2);
+Ey2 = double(Ey2);
+if nargin < 3
+    opts = [];
 end
 
-[p1,p2] = size(ExxT);
-if p1 ~= p2
-    error('ExxT must be a square matrix.');
+[errorCov, theta, rho2, info] = NC(ExxT, opts);
+[~, anchor] = max(abs(theta));
+if theta(anchor) < 0
+    theta = -theta;
 end
 
-if ~isscalar(Ey2) || Ey2 <= 0
-    error('Ey2 must be a positive scalar.');
-end
-
-%% ---------- Setup ----------
-p = p1;
-
-% Symmetrize for numerical stability
-Q = (ExxT + ExxT') / 2;
-
-% Normalize covariance
-C = Q / Ey2;
-
-diagC = diag(C);
-if any(diagC <= 0)
-    error('Normalized covariance has non-positive diagonal entries.');
-end
-
-sqrtDiagC = sqrt(diagC);
-
-%% ---------- Parameters ----------
-beta   = 0.5 * min(diagC);   % isotropic noise approximation
-lambda = 0.01;               % step size
-iters  = 2000;
-tol    = 1e-12;
-
-%% ---------- Initialization ----------
-% Leading eigenpair gives best rank-1 approximation under L2 sense
-opts.tol = 1e-6;
-opts.maxit = 500;
-
-[V,D] = eigs(C - beta*eye(p), 1, 'largestreal', opts);
-
-a_est = V * sqrt(max(D,0));
-
-% Enforce consistent sign (stabilizes iteration)
-a_est = sign(a_est) .* abs(a_est);
-
-% Scale step size relative to magnitude
-lambda = lambda / max(norm(a_est),1e-8);
-
-%% ---------- Iterative optimization ----------
-for i = 1:iters
-    
-    % Rank-1 reconstruction
-    A = a_est * a_est';
-    
-    % Subgradient of L1 off-diagonal mismatch
-    S = sign(A - C);
-    S(1:p+1:end) = 0;   % remove diagonal contribution
-    
-    grad = S * a_est;
-    
-    % Gradient descent
-    a_est = a_est - lambda * grad;
-    
-    % Projection: enforce a_i^2 <= C_ii
-    a_est = sign(a_est) .* min(abs(a_est), sqrtDiagC);
-    
-end
-
-%% ---------- Final outputs ----------
-A = a_est * a_est';
-
-% Noise-to-signal ratio matrix
-N_est = C - A;
-
-% Symmetry cleanup
-N_est = (N_est + N_est') / 2;
-
-% Numerical cleanup for diagonal
-d = diag(N_est);
-d(d < 0 & d > -tol) = 0;
-N_est(1:p+1:end) = d;
-
+N_est = errorCov / Ey2;
+a_est = theta / sqrt(Ey2);
+signalVariance = theta.^2;
+noiseVariance = max(diag(errorCov), 0);
+snr_est = signalVariance ./ noiseVariance;
+fit = struct('errorCov', errorCov, 'theta', theta, 'rho2', rho2, ...
+    'covariance', errorCov + theta*theta', 'info', info);
 end

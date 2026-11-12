@@ -22,7 +22,7 @@ function [EeeT_est, theta_est, rho2_est] = TC(covx)
 %   - Requires nonzero off-diagonal covariances; otherwise returns NaNs.
 %   - If any estimated error variance is negative or non-finite, the
 %     entire solution is invalid and NaNs are returned.
-%   - rho2 = 1 - Eii / Var(y) is clipped for tiny numerical violations.
+%   - rho2 = 1 - Eii / Qii uses the variance of each product.
 % ============================================================
 
 %% ---------- Input check ----------
@@ -45,6 +45,11 @@ Q = (covx + covx.') / 2;
 Q11 = Q(1,1); Q22 = Q(2,2); Q33 = Q(3,3);
 Q12 = Q(1,2); Q13 = Q(1,3); Q23 = Q(2,3);
 
+scale = max(abs(Q(:)));
+if scale > 0
+    Q11 = Q11 / scale; Q22 = Q22 / scale; Q33 = Q33 / scale;
+    Q12 = Q12 / scale; Q13 = Q13 / scale; Q23 = Q23 / scale;
+end
 tol = 1e-12;
 
 %% ---------- Validity check for denominators ----------
@@ -73,7 +78,7 @@ if any(Evec < 0) || any(~isfinite(Evec))
 end
 
 % Diagonal error covariance matrix
-EeeT_est = diag(Evec);
+EeeT_est = diag(Evec * scale);
 
 %% ---------- Signal variance estimation ----------
 % Use cyclic relation; choose the (1,2)-(1,3)/(2,3) formulation
@@ -93,7 +98,7 @@ theta_est = [1;
              Q23 / Q12];
 
 %% ---------- Squared correlation estimation ----------
-rho2_est = 1 - Evec / Ey2_est;
+rho2_est = 1 - Evec ./ [Q11; Q22; Q33];
 
 % Clip tiny numerical violations to [0,1]
 rho2_est(rho2_est < 0 & rho2_est > -tol) = 0;

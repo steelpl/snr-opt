@@ -1,5 +1,7 @@
 clear; clc
-%% ECC sweep analysis: TC vs NC
+%% Error cross-correlation sweep for TC and published NC
+% Pham, H. T., & Kim, S. (2027). Journal of Hydrology, 682, 136749.
+% https://doi.org/10.1016/j.jhydrol.2026.136749
 
 p = 3;
 rng(123);
@@ -11,7 +13,6 @@ SNRdB = 0.1;
 SNR = 10^(SNRdB/10);
 
 nMC = 500;
-tol = 1e-10;
 
 %% Common random numbers across ecc
 A_all    = rand(p,nMC);
@@ -62,16 +63,17 @@ for ie = 1:nE
         
         % --- TC / NC ---
         [EeeT_TC, ~, ~] = TC(ExxT);
-        [EeeT_NC, ~, ~] = NC(ExxT);
+        [EeeT_NC, ~, ~, ncInfo] = NC(ExxT);
         
         % --- TC failure ---
-        tc_invalid = any(isnan(EeeT_TC(:))) || any(diag(EeeT_TC) < 0);
+        tc_invalid = any(~isfinite(EeeT_TC(:))) || any(diag(EeeT_TC) < 0);
         if tc_invalid
             tc_fail = tc_fail + 1;
         end
         
-        % --- NC failure (tolerance-based) ---
-        nc_invalid = any(isnan(EeeT_NC(:))) || any(diag(EeeT_NC) < -tol);
+        % --- NC failure (relative diagonal and PSD checks) ---
+        nc_invalid = any(~isfinite(EeeT_NC(:))) || ...
+            ~ncInfo.feasibleDiagonal || ~ncInfo.feasiblePSD;
         if nc_invalid
             nc_fail = nc_fail + 1;
         end
@@ -135,6 +137,11 @@ end
 %% Visualization
 %% =========================
 
+sweep_summary = table(ecc_list(:),tc_fail_rate,nc_fail_rate,mse_tc_med,mse_nc_med, ...
+    'VariableNames', {'ErrorCorrelation','TCFailurePercent','NCFailurePercent', ...
+    'TCMedianVarianceMSE','NCMedianVarianceMSE'});
+disp(sweep_summary)
+
 figure
 
 %% (1,3,1) Difference (TC - NC)
@@ -148,7 +155,7 @@ fill([ecc_list fliplr(ecc_list)], ...
 plot(ecc_list, diff_med*1e3, 'b-', 'LineWidth',2)
 
 ylim([-10 10])
-xlabel('ecc')
+xlabel('Error cross-correlation')
 ylabel('TC - NC (×10^{-3})')
 title('Difference (TC - NC)')
 grid on
@@ -168,7 +175,7 @@ fill([ecc_list fliplr(ecc_list)], ...
      [0.7 0.8 1], 'EdgeColor','none', 'FaceAlpha',0.5)
 plot(ecc_list, mse_nc_med, 'b-', 'LineWidth',2)
 
-xlabel('ecc')
+xlabel('Error cross-correlation')
 ylabel('Error Variance MSE')
 title('MSE of Estimated Error Variance (TC vs NC)')
 
@@ -186,7 +193,7 @@ hold on
 plot(ecc_list, tc_fail_rate, 'r-*', 'LineWidth',2)
 plot(ecc_list, nc_fail_rate, 'b-*', 'LineWidth',2)
 
-xlabel('ecc')
+xlabel('Error cross-correlation')
 ylabel('Failure rate (%)')
 title('Failure Rate')
 legend('TC','NC','Location','northwest')

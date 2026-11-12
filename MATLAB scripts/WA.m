@@ -1,65 +1,41 @@
-function u = WA(EeeT)
-% ============================================================
-% WA: Error-covariance-weighted average
+function u = WA(EeeT, covarianceScale)
+%WA Minimum-error-variance weights subject to sum(u) = 1.
+%   EeeT must be a positive semidefinite error covariance matrix. Products
+%   should already be on a common scale. For singular EeeT, use a
+%   zero-error combination if the constraint can be satisfied in its
+%   nullspace. Otherwise use the minimum-norm constrained solution.
+%   WA(E, covarianceScale) uses the observation covariance scale in the
+%   roundoff threshold for E formed by subtraction in NC. For an NC fit,
+%   pass fit.info.covarianceScale.
 %
-% INPUT
-%   EeeT : error covariance matrix (p x p)
-%
-% OUTPUT
-%   u    : merging weight (p x 1)
-%
-% METHOD
-%   The weighted-average solution is obtained by minimizing the variance
-%   of the merged estimate under the unbiasedness constraint:
-%
-%       min_u   u' EeeT u
-%       s.t.    eta' u = 1
-%
-%   where eta is a p x 1 vector of ones.
-%
-%   The closed-form solution is:
-%
-%       u = EeeT^(-1) eta / (eta' EeeT^(-1) eta)
-%
-%   In implementation, MATLAB backslash is used instead of an explicit
-%   matrix inverse for numerical stability.
-%
-% NOTES
-%   - This is the classical variance-minimizing weighted average.
-%   - The method uses only the error covariance matrix and does not
-%     explicitly account for scaling factors.
-%   - For this reason, WA is most directly comparable to other methods
-%     when the input datasets are on a common scale.
-%
-% REFERENCE
-%   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
-%   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
-%
-%   If you use this method, please cite the above reference.
-% ============================================================
+%   Kim et al. (2022). IEEE Transactions on Geoscience and Remote Sensing, 60.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 
-%% ---------- Input check ----------
-if nargin < 1
-    error('WA requires one input: EeeT.');
+validateattributes(EeeT, {'numeric'}, {'real','finite','square','nonempty'}, ...
+    'WA', 'EeeT', 1);
+EeeT = double(EeeT);
+[V, d] = eig(0.5 * EeeT + 0.5 * EeeT', 'vector');
+% Treat roundoff near the PSD boundary, including NC's interior margin, as zero.
+eigenScale = max(abs(d));
+if nargin >= 2
+    validateattributes(covarianceScale, {'numeric'}, {'real','finite','scalar','nonnegative'}, ...
+        'WA', 'covarianceScale', 2);
+    eigenScale = max(eigenScale,double(covarianceScale));
+end
+tol = 64 * numel(d) * eps * eigenScale;
+if any(d < -tol)
+    error('WA:IndefiniteCovariance', 'Error covariance must be positive semidefinite.');
 end
 
-[p1,p2] = size(EeeT);
-if p1 ~= p2
-    error('EeeT must be a square matrix.');
+onesVector = ones(numel(d),1);
+positive = d > tol;
+nullComponent = V(:,~positive)' * onesVector;
+if norm(nullComponent) > 64 * numel(d) * eps * norm(onesVector)
+    direction = V(:,~positive) * nullComponent;
+else
+    % Rescale eigenvalues before taking reciprocals to avoid an overflow.
+    direction = V(:,positive) * ((V(:,positive)' * onesVector) .* ...
+        (min(d(positive)) ./ d(positive)));
 end
-
-%% ---------- Setup ----------
-% Symmetrize EeeT to suppress tiny numerical asymmetry.
-EeeT = (EeeT + EeeT') / 2;
-
-eta = ones(p1,1);
-
-%% ---------- Solve optimal weights ----------
-% Compute EeeT^{-1} eta using backslash.
-tmp = EeeT \ eta;
-
-% Normalize so that sum(u) = 1.
-u = tmp / (eta' * tmp);
-
+u = direction / sum(direction);
 end

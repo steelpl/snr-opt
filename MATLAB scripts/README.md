@@ -1,51 +1,19 @@
-# MATLAB Implementation
+# MATLAB scripts
 
-This directory provides MATLAB scripts for reproducing SNR-based data merging experiments.
-
-➡️ For theoretical background and method descriptions, see the top-level README.
-
----
-
-## Files
-
-### Main Scripts
-
-- **mergingExample_the.m**  
-  Theoretical example based on covariance matrices (no time series)
-
-- **mergingExample_syn.m**  
-  Synthetic time-series example with explicit signal and error generation
-
----
-
-### Supporting Functions
-
-- **WA.m**  
-  Weighted averaging based on error covariance
-
-- **SNRopt.m**  
-  SNR-optimal merging weights
-
-- **maxR.m**  
-  Correlation-maximizing weights
-
-- **SNRest.m**  
-  Estimates scaling factor and noise-to-signal ratio
-
-- **NC.m**  
-  Estimates error covariance and correlation (generalized TC)
-
-- **EeeTGEN.m**  
-  Generates synthetic error covariance matrix
-
-- **dataGEN.m**  
-  Generates synthetic signal and error
-
----
-
-## How to Run
-
-### 1. Add path
+Run the following from the repository root.
 
 ```matlab
-addpath(genpath(pwd))
+addpath('MATLAB scripts')
+mergingExample_the
+mergingExample_syn
+TCvsNC
+```
+
+The two merging examples print MSE and squared correlation for WA, SNR-opt, maxR, and EW and display the comparisons. `TCvsNC.m` prints `sweep_summary` and plots the paired variance differences, median error-variance MSE, and failure rates across the error-correlation sweep.
+
+- `NC.m` estimates the error covariance, latent loadings, squared correlations, and diagnostics. It replaces the historical `ECVest.m`.
+- `SNRest.m` uses one NC fit and returns `[N, a, snr, fit]`. Existing two-output calls are supported. Supply a target signal variance as the second argument, or omit it for a standardized target.
+- `SNRopt.m`, `WA.m`, and `maxR.m` compute merging weights. `TC.m` is the three-product baseline.
+- `EeeTGEN.m` and `dataGEN.m` generate synthetic covariances and time series.
+
+[Model, usage, numerical results, and references](../README.md)

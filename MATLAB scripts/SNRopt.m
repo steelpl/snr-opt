@@ -22,8 +22,7 @@ function u = SNRopt(N,a)
 %
 %       u = (N + a a^T)^(-1) a
 %
-%   In implementation, the system is solved using MATLAB backslash
-%   rather than an explicit matrix inverse for numerical stability.
+%   The pseudoinverse gives the minimum-norm solution for singular C.
 %
 % NOTES
 %   - The formulation assumes that the signal and noise decomposition
@@ -37,7 +36,8 @@ function u = SNRopt(N,a)
 % REFERENCE
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+%   IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 %
 %   If you use this method, please cite the above reference.
 % ============================================================
@@ -64,11 +64,13 @@ end
 
 %% ---------- Setup ----------
 % Symmetrize N to suppress tiny numerical asymmetry.
-N = (N + N') / 2;
+N = 0.5 * double(N) + 0.5 * double(N');
+a = double(a);
 
 %% ---------- Solve optimal weights ----------
 % Solve (N + a a^T) u = a
-% Using backslash is more stable than explicit inversion.
-u = (N + a*a') \ a;
+% Use the minimum-norm solution for singular C.
+C = N + a*a';
+u = pinv(C) * a;
 
 end

@@ -30,12 +30,13 @@ function u = maxR(theta, Q)
 %   - The solution is defined up to a multiplicative constant.
 %   - Normalization (sum(u)=1) is applied for interpretability,
 %     but is not required for optimality.
-%   - For ill-conditioned Q, regularization may be required.
+%   - The pseudoinverse handles singular observation covariances.
 %
 % REFERENCE
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
 %   Rethinking Satellite Data Merging: From Averaging to SNR Optimization.
-%   IEEE Trans Geosci Remote Sens., 60, 1–15.
+%   IEEE Transactions on Geoscience and Remote Sensing, 60, 1–15.
+%   https://doi.org/10.1109/TGRS.2021.3107028
 %
 % Also related to classical Rayleigh quotient optimization:
 % Horn, R. A., & Johnson, C. R. (2013).
@@ -64,19 +65,20 @@ end
 
 %% ---------- Setup ----------
 % Symmetrize Q to remove small numerical asymmetry.
-Q = (Q + Q') / 2;
+Q = 0.5 * double(Q) + 0.5 * double(Q');
+theta = double(theta);
 
 %% ---------- Solve optimal weights ----------
 % Solve Q u = theta (Rayleigh quotient solution)
 % Using backslash ensures numerical stability over explicit inverse.
-u = Q \ theta;
+u = pinv(Q) * theta;
 
 %% ---------- Normalization ----------
 % Normalize weights for interpretability (sum to 1).
 % This does not affect optimality.
 s = sum(u);
 
-if abs(s) > 1e-12
+if abs(s) > 1e-12 * norm(u,1)
     u = u / s;
 end
 
