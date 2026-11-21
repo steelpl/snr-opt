@@ -2,7 +2,7 @@
 
 SNR-opt merges collocated observations by minimizing the mean squared error of a linear estimate of a common signal. This repository includes MATLAB scripts and a Python notebook for SNR-opt, weighted averaging (WA), correlation maximization (maxR), and equal weighting (EW).
 
-The current workflow uses the published N-tuple collocation (NC) estimator for error covariance and SNR estimation. The MATLAB implementation is based on [NC-public at `be461e3`](https://github.com/steelpl/NC-public/tree/be461e390045f09416e398049ae7c8d21db7230d). The Python helper implements the same default fitting and feasibility steps.
+The MATLAB workflow uses [NC v1.1.0](https://github.com/steelpl/NC-public/tree/v1.1.0) for error covariance and SNR estimation. The Python notebook and its helper retain the implementation used for the reported demonstrations.
 
 ## Covariance model and weights
 
@@ -12,7 +12,7 @@ $$
 Q = \theta\theta^{\mathsf T} + E, \qquad E = \mathrm{Cov}(e).
 $$
 
-NC minimizes the sum of absolute off-diagonal residuals under the bounds `theta(i)^2 <= Q(i,i)`. It then adjusts the fitted signal vector, if needed, so the residual error covariance is positive semidefinite (PSD) within numerical tolerance. Its diagnostics record any input covariance repair and change in fit from this second step. NC can be computed for two products, but that case is structurally underdetermined. Use three or more when available. In the presence of correlated errors, the physical signal and error covariances are generally non-unique.
+For MATLAB NC v1.1.0, three admissible products have a closed-form solution. Other cases use bounded candidates, comparing the off-diagonal absolute residual in correlation units and checking positive-semidefinite feasibility. Outputs use the original product units. NC can be computed for two products, but that case is structurally underdetermined. Use three or more when available. In the presence of correlated errors, the physical signal and error covariances are generally non-unique.
 
 SNR-est uses that one fit to compute the following quantities.
 
@@ -76,6 +76,8 @@ merged = Xc @ u
 - `TC(Q)` remains available as a three-product baseline. Its third output uses each product's observed variance to compute squared correlation.
 
 ## Reproduced results
+
+The archived tables, figures and MATLAB–Python comparison below were produced with [this repository revision](https://github.com/steelpl/snr-opt/tree/7f202c5dd6716f172fe18c4c6e5c592bde61d58f). Use that revision to reproduce them.
 
 The default examples use seed 123 and error cross-correlation 0.30. For estimated weights, the simulated examples use half the true signal variance as a deliberately rough target-scale proxy. MSE and squared correlation are evaluated against the simulated signal. These are synthetic demonstrations.
 

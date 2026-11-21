@@ -1,7 +1,7 @@
 function [EeeT_est, theta_est, rho2_est, info] = NC(covx, opts)
 % ============================================================
 % N-Tuple Collocation (NC)
-% Algorithm from https://github.com/steelpl/NC-public (be461e3, MIT).
+% Adapted from NC-public (be461e3, MIT) for this study; see README.md.
 % Constrained rank-1 decomposition of a covariance matrix
 %
 % INPUT
@@ -23,39 +23,17 @@ function [EeeT_est, theta_est, rho2_est, info] = NC(covx, opts)
 %   rho2_est  : squared correlation with latent signal (p-by-1)
 %   info      : diagnostic structure with objective and convergence details
 %
-% PURPOSE
-%   Find theta and EeeT satisfying
-%       Q ≈ theta*theta' + EeeT
-%   First fit with theta_i^2 <= Q_ii, then (by default) project theta into
-%   range(Q) and shrink it radially until theta' * pinv(Q) * theta <= 1.
-%   This makes Q - theta*theta' PSD while retaining the decomposition.
-%   This two-stage estimator is NOT an exact solution of a joint PSD-
-%   constrained L1 optimization. The loss change is reported explicitly.
-%
-%   The fit minimizes the off-diagonal L1 mismatch between Q and
-%   theta*theta':
-%
-%       sum_{i ~= j} |Q_ij - theta_i theta_j|
-%
-% METHOD SUMMARY
-%   - Symmetrize input covariance matrix Q.
-%   - Work in globally normalized covariance units for scale invariance.
-%   - Initialize from Q - beta*I, with beta <= 0.95*lambda_max(Q).
-%   - Apply projected subgradient descent with monotone backtracking to
-%     reduce the off-diagonal L1 mismatch.
-%   - After each step, project theta_i to satisfy |theta_i| <= sqrt(Q_ii).
-%   - Stop adaptively when the off-diagonal L1 objective no longer improves.
-%   - Return the best theta found across all starts.
-%   - By default, apply the PSD feasibility map to the final theta.
-%
-% NOTES
-%   - maxIters is only a safety cap.
-%   - Early stopping is controlled by objective improvement, not iteration count.
-%   - Small tolerances guard against tiny negative numerical values.
-%   - A small objective does not identify the unique physical error matrix.
-%   - p = 2 is computationally supported but structurally underdetermined;
-%     p >= 3 is recommended and still requires assumptions/regularization.
-%   - Cov(true signal,error_i) = 0 is needed to interpret the decomposition.
+% Revised estimator for the three-merging-method comparison. Returned estimates
+% use an admissible exact solution for three products. Other fits use
+% dimensionless off-diagonal L1 loss; feasible residual candidates are
+% compared after PSD projection. For four or more products this is a
+% multistart numerical estimate, without a global optimality certificate.
+% info.objective retains the original covariance-unit residual for callers.
+% info.standardizedObjective and info.relativeResidual describe the fitted
+% dimensionless loss. FitClass is exact/bound/sign for nonzero triples,
+% degenerate for triples with zero covariances, multi for larger inputs,
+% and underdetermined for two products. Polarities are anchored to the
+% first non-negligible standardized loading.
 %
 % REFERENCES
 %   Kim, S., Sharma, A., Liu, Y. Y., & Young, S. I. (2022).
@@ -118,139 +96,191 @@ params.psdTol        = getOpt(opts, 'psdTol', 1e-10);
 params.verbose       = getOpt(opts, 'verbose', false);
 validate_parameters(params);
 
-%% ---------- Symmetrize and check covariance matrix ----------
-Qoriginal = 0.5 * double(covx) + 0.5 * double(covx');
-covarianceScale = max(abs(Qoriginal(:)));
-if covarianceScale == 0
-    covarianceScale = 1; % exact zero input; no unit-dependent positive floor
+%% Work in dimensionless product units.
+Qoriginal = 0.5*double(covx) + 0.5*double(covx');
+covarianceScale=max(abs(Qoriginal(:)));
+if covarianceScale==0, covarianceScale=1; end
+Qbase=Qoriginal;
+inputRepaired=false;
+% An invalid covariance can contain a non-positive variance with nonzero
+% cross terms. Retain the original opt-in repair behavior for these inputs.
+zeroVar=diag(Qbase)<=0;
+if any(diag(Qbase)<0) || any(any(Qbase(zeroVar,:)~=0))
+    [Qbase,initial]=repair_psd_matrix(Qbase,params.psdTol,params.repairInputPSD,'Input covariance matrix');
+    inputRepaired=initial.repaired;
 end
-Q = Qoriginal / covarianceScale;
-[Q, inputPSDInfo] = repair_psd_matrix(Q, params.psdTol, params.repairInputPSD, ...
-    'Input covariance matrix');
-diagQ = diag(Q);
-
-if any(diagQ < -params.tol)
-    error('Input covariance matrix has negative diagonal entries.');
+scale=sqrt(max(0,diag(Qbase)));
+divisor=scale; divisor(divisor==0)=1;
+R=(Qbase./divisor)./divisor';
+[R,check]=repair_psd_matrix(R,params.psdTol,params.repairInputPSD,'Input product correlation matrix');
+inputRepaired=inputRepaired||check.repaired;
+Q=(R.*divisor).*divisor';
+diagR=max(0,diag(R));
+bounds=sqrt(diagR);
+offMask=~eye(p);
+beta=min(params.betaFactor*min(diagR),0.95*max(eig(R)));
+fitClass='multi'; exact=false;
+tri=[];
+if p==3
+    qr=[R(1,2);R(1,3);R(2,3)];
+    if any(qr==0)
+        fitClass='degenerate';
+    elseif prod(sign(qr))<0
+        fitClass='sign';
+    else
+        sq=[qr(1)*(qr(2)/qr(3)); qr(1)*(qr(3)/qr(2)); qr(2)*(qr(3)/qr(1))];
+        tri=sqrt(sq).*[1;sign(qr(1));sign(qr(2))];
+        exact=all(sq<=diagR+16*eps(max(1,max(diagR))));
+        if exact, fitClass='exact'; else, fitClass='bound'; end
+    end
+elseif p==2
+    fitClass='underdetermined';
 end
-
-diagQ(diagQ < 0 & diagQ > -params.tol) = 0;
-Q(1:p+1:end) = diagQ;
-sqrtDiagQ = sqrt(max(diagQ,0)); % projection bound for theta
-
-requestedBeta = params.betaFactor * min(diagQ);
-maxInputEigenvalue = max(eig(Q));
-beta = min(max(requestedBeta, 0), 0.95 * max(maxInputEigenvalue, 0));
-
-%% ---------- Off-diagonal mask ----------
-offMask = true(p);
-offMask(1:p+1:end) = false;     % exclude diagonal from L1 objective
-
-%% ---------- Multi-start projected subgradient descent ----------
-thetaStarts = build_theta_starts(Q,beta,sqrtDiagQ,params);
-
-bestGlobalObj = Inf;
-bestGlobalTheta = NaN(p,1);
-startInfo = repmat(struct( ...
-    'initialObjective', NaN, ...
-    'finalObjective', NaN, ...
-    'iterations', 0, ...
-    'converged', false), size(thetaStarts,2), 1);
-
-for iStart = 1:size(thetaStarts,2)
-
-    [theta_i, obj_i, runInfo] = run_projected_l1( ...
-        Q, thetaStarts(:,iStart), sqrtDiagQ, offMask, params);
-
-    startInfo(iStart) = runInfo;
-
-    if obj_i < bestGlobalObj
-        bestGlobalObj = obj_i;
-        bestGlobalTheta = theta_i;
-        bestStart = iStart;
+% Keep the objective and the PSD map in the same dimensionless units. The
+% rounded correlation is only used to generate search candidates for p>=4.
+% Selection and all reported diagnostics use the original correlation.
+if exact
+    u=min(max(tri,-bounds),bounds);
+    raw=u;
+    bestStart=1;
+    startInfo=struct('initialObjective',0,'finalObjective',offdiag_L1_objective(R,u,offMask),'iterations',0,'converged',true);
+    psdInfo=no_repair();
+else
+    searchR=R;
+    if p>=4
+        searchR=round(R,13);
+    end
+    anchor=R./max(bounds',realmin);
+    if p==3 && ~any(diagR==0) && ~strcmp(fitClass,'degenerate')
+        % For a three-product, nonzero, inadmissible system, a unit-bound
+        % anchor can attain the global box-L1 minimum. Each such candidate
+        % has a PSD residual (the corresponding Schur complement). A
+        % bound violation leaves one underestimated edge; a sign conflict
+        % must mismatch at least one edge. Changing either matched edge by
+        % |d| changes their product by at most |d|. Evaluate all three.
+        candidates=anchor;
+    else
+        spectral=build_theta_starts(searchR,beta,bounds,params);
+        candidates=[anchor,spectral];
+        for j=1:size(spectral,2)
+            legacy=run_projected_l1(searchR,spectral(:,j),bounds,offMask,params);
+            candidates(:,end+1)=legacy; %#ok<AGROW>
+        end
+    end
+    if ~isempty(tri), candidates(:,end+1)=project_theta(tri,bounds); end
+    count=size(candidates,2);
+    startInfo=repmat(struct('initialObjective',0,'finalObjective',0,'iterations',0,'converged',true),count,1);
+    best=inf; bestStart=1;
+    for j=1:count
+        candidate=candidates(:,j);
+        initialObj=offdiag_L1_objective(R,candidate,offMask);
+        if p>=4 || strcmp(fitClass,'degenerate') || p==2
+            [trial,it]=coordinate_medians(searchR,candidate,bounds,params);
+            proposals=[candidate,trial];
+        else
+            it=0;
+            proposals=candidate;
+        end
+        finalObj=Inf;
+        for k=1:size(proposals,2)
+            rawTrial=proposals(:,k); uTrial=rawTrial; map=no_repair();
+            if params.enforcePSD && min(eig(R-uTrial*uTrial')) < -16*p*eps(max(1,norm(R,'fro')))
+                [uTrial,map]=enforce_residual_psd(R,uTrial,params.psdTol);
+            end
+            obj=offdiag_L1_objective(R,uTrial,offMask);
+            finalObj=min(finalObj,obj);
+            if obj < best-32*p*eps(max(1,obj)) || isinf(best)
+                best=obj; u=uTrial; raw=rawTrial; psdInfo=map; bestStart=j;
+            end
+        end
+        startInfo(j)=struct('initialObjective',initialObj,'finalObjective',finalObj,'iterations',it,'converged',it<params.maxIters);
     end
 end
-
-%% ---------- Use best solution ----------
-theta_est = bestGlobalTheta;
-
-psdInfo = struct('applied', false, 'thetaScale', 1, ...
-    'rangeProjectionRelativeChange', 0, 'thetaRelativeChange', 0, ...
-    'mahalanobisSquaredBeforeShrink', NaN, ...
-    'minEigenvalueBefore', NaN, 'minEigenvalueAfter', NaN);
-if params.enforcePSD
-    [theta_est, psdInfo] = enforce_residual_psd(Q, theta_est, params.psdTol);
-end
-
-theta_outer = theta_est * theta_est';
-EeeT_est = Q - theta_outer;
-EeeT_est = 0.5 * (EeeT_est + EeeT_est');   % enforce symmetry
-% Do not independently clip E: doing so would break Q = theta*theta' + E.
-finalPSDInfo = psd_matrix_info(EeeT_est);
-
-%% ---------- Squared correlation ----------
-rho2_est = NaN(p,1); % correlation is undefined for a zero-variance dataset
-positiveVariance = diagQ > 0;
-rho2_est(positiveVariance) = theta_est(positiveVariance).^2 ./ diagQ(positiveVariance);
-
-rho2_est(rho2_est < 0 & rho2_est > -params.tol) = 0;
-rho2_est(rho2_est > 1 & rho2_est < 1 + params.tol) = 1;
-
-finalObjective = offdiag_L1_objective(Q, theta_est, offMask);
-
-%% ---------- Diagnostics ----------
-info = struct();
-info.objective = finalObjective * covarianceScale;
-info.objectiveBeforePSD = bestGlobalObj * covarianceScale;
-info.objectiveChangePSD = (finalObjective - bestGlobalObj) * covarianceScale;
-info.objectiveChangePSDRelativeToQ = (finalObjective - bestGlobalObj) / ...
-    max(norm(Q,'fro'), realmin);
-info.bestStart = bestStart;
-info.nStarts = size(thetaStarts,2);
-info.startInfo = startInfo;
-for iStart = 1:numel(info.startInfo)
-    info.startInfo(iStart).initialObjective = startInfo(iStart).initialObjective * covarianceScale;
-    info.startInfo(iStart).finalObjective = startInfo(iStart).finalObjective * covarianceScale;
-end
-info.minErrorVariance = min(diag(EeeT_est)) * covarianceScale;
-info.minErrorCovEigenvalue = finalPSDInfo.minEigenvalueAfter * covarianceScale;
-info.maxRho2 = max(rho2_est);
-info.feasibleDiagonal = all(diag(EeeT_est) >= -params.tol);
-info.feasiblePSD = finalPSDInfo.minEigenvalueAfter >= -params.psdTol * max(norm(Q,'fro'),realmin);
-info.inputMinEigenvalue = inputPSDInfo.minEigenvalueBefore * covarianceScale;
-info.inputPSDRepaired = inputPSDInfo.repaired;
-info.inputPSDRelativeChange = norm(Q - Qoriginal / covarianceScale,'fro') / ...
-    max(norm(Qoriginal / covarianceScale,'fro'),realmin);
-info.psdEnforced = params.enforcePSD;
-info.psdRepairApplied = psdInfo.applied || finalPSDInfo.repaired;
-info.thetaScalePSD = psdInfo.thetaScale;
-info.thetaRelativeChangePSD = psdInfo.thetaRelativeChange;
-info.rangeProjectionRelativeChange = psdInfo.rangeProjectionRelativeChange;
-info.mahalanobisSquaredBeforeShrink = psdInfo.mahalanobisSquaredBeforeShrink;
-info.decompositionRelativeError = norm(Q - theta_outer - EeeT_est,'fro') / max(norm(Q,'fro'),realmin);
-info.covarianceScale = covarianceScale;
-info.requestedSpectralShift = requestedBeta * covarianceScale;
-info.actualSpectralShift = beta * covarianceScale;
-info.spectralShiftAdapted = beta ~= requestedBeta;
-info.p2Underdetermined = p == 2;
-info.physicalErrorIdentified = false;
-info.estimator = 'box-L1 followed by PSD feasibility map';
-if ~params.enforcePSD
-    info.estimator = 'raw box-L1 diagnostic (PSD not enforced)';
-end
-info.params = params;
-
-% Return physical covariance units; all numerical tolerances above were relative.
-EeeT_est = EeeT_est * covarianceScale;
-theta_est = theta_est * sqrt(covarianceScale);
-
+% The overall sign is arbitrary. Anchor to the first non-negligible
+% standardized loading so multiplying a product by 100 cannot flip the score.
+anchor=find(abs(u)>32*eps*max(abs(u)),1);
+if ~isempty(anchor) && u(anchor)<0, u=-u; raw=-raw; end
+theta_est=divisor.*u;
+EeeT_est=Q-theta_est*theta_est';
+EeeT_est=(EeeT_est+EeeT_est')/2;
+rho2_est=nan(p,1); positive=diagR>0;
+rho2_est(positive)=min(1,max(0,u(positive).^2./diagR(positive)));
+offTotal=sum(abs(R(offMask)));
+rawTotal=sum(abs(Q(offMask)));
+rawObj=offdiag_L1_objective(Q,theta_est,offMask);
+rawBefore=offdiag_L1_objective(Q,divisor.*raw,offMask);
+stdObj=offdiag_L1_objective(R,u,offMask);
+residual=R-u*u';
+info=struct();
+info.FitClass=fitClass;
+info.standardizedObjective=stdObj;
+info.standardizedObjectiveBeforePSD=offdiag_L1_objective(R,raw,offMask);
+info.relativeResidual=stdObj/max(realmin,offTotal);
+info.rawRelativeResidual=rawObj/max(realmin,rawTotal);
+info.boundActive=positive & abs(abs(raw)-bounds)<=1e-8.*bounds;
+info.boundActiveAfterPSD=positive & abs(abs(u)-bounds)<=1e-8.*bounds;
+info.negativeLoading=u < -1e-10*max(abs(u));
+weight=pinv(R)*u;
+info.negativeWeight=weight < -1e-10*max(abs(weight));
+info.objective=rawObj;
+info.objectiveBeforePSD=rawBefore;
+info.objectiveChangePSD=rawObj-rawBefore;
+info.objectiveChangePSDRelativeToQ=(rawObj-rawBefore)/max(norm(Q,'fro'),realmin);
+info.bestStart=bestStart;
+info.nStarts=numel(startInfo);
+info.startInfo=startInfo; % start objectives are now in correlation units.
+info.minErrorVariance=min(diag(EeeT_est));
+info.minErrorCovEigenvalue=min(eig(EeeT_est));
+info.maxRho2=max(rho2_est);
+info.feasibleDiagonal=all(diag(residual)>=-params.psdTol);
+info.feasiblePSD=min(eig(residual))>=-params.psdTol*max(norm(R,'fro'),realmin);
+info.inputMinEigenvalue=min(eig(Qoriginal));
+info.inputPSDRepaired=inputRepaired;
+info.inputPSDRelativeChange=norm(Q-Qoriginal,'fro')/max(norm(Qoriginal,'fro'),realmin);
+info.psdEnforced=params.enforcePSD;
+info.psdRepairApplied=psdInfo.applied;
+info.thetaScalePSD=psdInfo.thetaScale;
+info.thetaRelativeChangePSD=psdInfo.thetaRelativeChange;
+info.rangeProjectionRelativeChange=psdInfo.rangeProjectionRelativeChange;
+info.mahalanobisSquaredBeforeShrink=psdInfo.mahalanobisSquaredBeforeShrink;
+info.decompositionRelativeError=norm(Q-theta_est*theta_est'-EeeT_est,'fro')/max(norm(Q,'fro'),realmin);
+info.covarianceScale=covarianceScale;
+info.requestedSpectralShift=params.betaFactor*min(diagR);
+info.actualSpectralShift=beta;
+info.spectralShiftAdapted=beta~=info.requestedSpectralShift;
+info.p2Underdetermined=p==2;
+info.physicalErrorIdentified=false;
+info.estimator='Exact three-product fit or dimensionless off-diagonal L1 fit';
+info.params=params;
 if params.verbose
-    fprintf('NC: best objective = %.6g, best start = %d/%d, min diag(E) = %.6g, min eig(E) = %.6g\n', ...
-        info.objective, info.bestStart, info.nStarts, info.minErrorVariance, ...
-        info.minErrorCovEigenvalue);
+    fprintf('NC: %s, correlation-unit relative residual %.5g, minimum error eigenvalue %.5g\n',fitClass,info.relativeResidual,info.minErrorCovEigenvalue);
+end
 end
 
+function result=no_repair()
+result=struct('applied',false,'thetaScale',1,'rangeProjectionRelativeChange',0,'thetaRelativeChange',0,'mahalanobisSquaredBeforeShrink',NaN);
 end
 
+function [u,iter]=coordinate_medians(R,u,bounds,params)
+% A coordinatewise minimum is the weighted median of R_ij/u_j with weights
+% |u_j|. Choose the projection of the current value into a tied interval.
+p=length(u);
+for iter=1:params.maxIters
+    last=u;
+    for i=1:p
+        keep=u~=0; keep(i)=false;
+        if ~any(keep), continue; end
+        [values,order]=sort(R(keep,i)./u(keep));
+        weights=abs(u(keep)); cumulative=cumsum(weights(order)); half=cumulative(end)/2;
+        tol=16*eps(cumulative(end));
+        left=find(cumulative>=half-tol,1);
+        right=find(cumulative>=half+tol,1);
+        if isempty(right),right=numel(values);end
+        u(i)=max(-bounds(i),min(bounds(i),max(values(left),min(values(right),u(i)))));
+    end
+    if norm(u-last,Inf)<=max(32*eps,params.tol), break; end
+end
+end
 
 %% ============================================================
 % Local function 0: Option reader
